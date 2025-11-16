@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 export default function Visualizacao({
   selecionados = [],
@@ -6,13 +6,23 @@ export default function Visualizacao({
   voltar = () => {},
   editarReps = () => {},
 }) {
-  // Observações por exercício
-  const [obs, setObs] = useState(selecionados.map(() => ""));
 
-  // Converte GIF para Base64 (para o HTML exportado)
-  const carregarGIF = async (grupo, file) => {
-    const path = `/gifs/${grupo}/${file}`;
-    const res = await fetch(path);
+  const [obs, setObs] = useState(selecionados.map(() => ""));
+  const [gifsUrls, setGifsUrls] = useState(null);
+
+  // 🔥 Carrega o JSON com todas URLs do R2
+  useEffect(() => {
+    fetch("/gifsUrls.json")
+      .then((res) => res.json())
+      .then((data) => setGifsUrls(data));
+  }, []);
+
+  // ⛔ Impede renderização antes de carregar os links
+  if (!gifsUrls) return <div className="text-center p-10">Carregando GIFs...</div>;
+
+  // Converte GIF da URL R2 para Base64 (usado no HTML exportado)
+  const carregarGIF = async (url) => {
+    const res = await fetch(url);
     const blob = await res.blob();
 
     return await new Promise((resolve) => {
@@ -28,18 +38,21 @@ export default function Visualizacao({
 
     for (let i = 0; i < selecionados.length; i++) {
       const ex = selecionados[i];
-      const base64 = await carregarGIF(ex.grupo, ex.file);
+      const urlR2 = gifsUrls[ex.grupo].find((u) =>
+        u.toLowerCase().includes(encodeURIComponent(ex.file).toLowerCase())
+      );
+
+      const base64 = await carregarGIF(urlR2);
 
       blocoHTML += `
         <section style="margin-bottom:40px; text-align:center;">
-          
           <div style="
             display:flex;
             justify-content:center;
             align-items:center;
             gap:12px;
-            margin-bottom:8px;
-          ">
+            margin-bottom:8px;">
+            
             <div style="
               width:32px;
               height:32px;
@@ -50,30 +63,16 @@ export default function Visualizacao({
               display:flex;
               justify-content:center;
               align-items:center;
-              font-family:Inter, Arial;
-            ">
+              font-family:Inter, Arial;">
               ${i + 1}
             </div>
 
-            <h3 style="
-              font-size:22px;
-              font-weight:600;
-              font-family:Inter,Arial;
-            ">
+            <h3 style="font-size:22px; font-weight:600; font-family:Inter,Arial;">
               ${ex.nome}
             </h3>
           </div>
 
-          ${
-            obs[i]
-              ? `<p style="
-                font-size:14px;
-                color:#555;
-                margin-bottom:16px;
-                font-family:Inter,Arial;
-              ">${obs[i]}</p>`
-              : ""
-          }
+          ${obs[i] ? `<p style="font-size:14px; color:#555; margin-bottom:16px;">${obs[i]}</p>` : ""}
 
           <img src="${base64}" alt="${ex.nome}" style="
             width:290px;
@@ -84,7 +83,6 @@ export default function Visualizacao({
             background:#fafafa;
             border:1px solid #eee;
           "/>
-
         </section>
       `;
     }
@@ -96,25 +94,13 @@ export default function Visualizacao({
 <meta charset="UTF-8"/>
 <title>Treino - ${nomeAluno}</title>
 <style>
-  body {
-    background:white;
-    padding:30px;
-    max-width:900px;
-    margin:auto;
-    font-family:Inter,Arial;
-  }
-  h1 {
-    text-align:center;
-    font-size:28px;
-    margin-bottom:30px;
-    font-weight:600;
-  }
+  body { background:white; padding:30px; max-width:900px; margin:auto; font-family:Inter,Arial; }
+  h1 { text-align:center; font-size:28px; margin-bottom:30px; font-weight:600; }
 </style>
 </head>
 <body>
 
 <h1>Treino de ${nomeAluno}</h1>
-
 ${blocoHTML}
 
 <footer style="text-align:center;margin-top:40px;font-size:12px;color:#aaa;">
@@ -122,8 +108,7 @@ ${blocoHTML}
 </footer>
 
 </body>
-</html>
-    `;
+</html>`;
 
     const blob = new Blob([finalHTML], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -142,55 +127,57 @@ ${blocoHTML}
         </h2>
 
         <div className="space-y-6">
-          {selecionados.map((ex, idx) => (
-            <div
-              key={ex.id}
-              className="p-5 border border-gray-200 rounded-2xl shadow-md bg-white"
-            >
-              {/* Topo — número + nome + reps */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  
-                  {/* Número no círculo */}
-                  <div className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">
-                    {idx + 1}
+          {selecionados.map((ex, idx) => {
+
+            // 🔥 URL correta do Cloudflare R2
+            const urlR2 = gifsUrls[ex.grupo].find((u) =>
+              u.toLowerCase().includes(encodeURIComponent(ex.file).toLowerCase())
+            );
+
+            return (
+              <div key={ex.id} className="p-5 border border-gray-200 rounded-2xl shadow-md bg-white">
+
+                {/* Número + nome + reps */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">
+                      {idx + 1}
+                    </div>
+                    <div className="text-lg font-medium">{ex.nome}</div>
                   </div>
 
-                  <div className="text-lg font-medium">{ex.nome}</div>
+                  <input
+                    type="text"
+                    defaultValue={ex.reps || "3x10 rep"}
+                    onChange={(e) => editarReps(idx, e.target.value)}
+                    className="border border-gray-300 rounded-md px-3 py-1 text-sm w-28 text-center"
+                  />
                 </div>
 
-                {/* Campo de repetição */}
-                <input
-                  type="text"
-                  defaultValue={ex.reps || "3x10 rep"}
-                  onChange={(e) => editarReps(idx, e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1 text-sm w-28 text-center"
+                {/* Observações */}
+                <textarea
+                  placeholder="Observações para o aluno..."
+                  value={obs[idx]}
+                  onChange={(e) => {
+                    const novas = [...obs];
+                    novas[idx] = e.target.value;
+                    setObs(novas);
+                  }}
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm mb-4"
+                  rows={2}
                 />
-              </div>
 
-              {/* Observações */}
-              <textarea
-                placeholder="Observações para o aluno..."
-                value={obs[idx]}
-                onChange={(e) => {
-                  const novas = [...obs];
-                  novas[idx] = e.target.value;
-                  setObs(novas);
-                }}
-                className="w-full border border-gray-300 rounded-md p-2 text-sm mb-4"
-                rows={2}
-              />
-
-              {/* GIF menor (10% menor) */}
-              <div className="flex justify-center">
-                <img
-                  src={`/gifs/${ex.grupo}/${ex.file}`}
-                  alt={ex.nome}
-                  className="w-28 h-28 object-contain border rounded-xl bg-gray-50"
-                />
+                {/* GIF — AGORA CORRETO VIA R2 */}
+                <div className="flex justify-center">
+                  <img
+                    src={urlR2}
+                    alt={ex.nome}
+                    className="w-28 h-28 object-contain border rounded-xl bg-gray-50"
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Botões */}
