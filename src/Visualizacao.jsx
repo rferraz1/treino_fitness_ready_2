@@ -1,24 +1,20 @@
 import React, { useState } from "react";
 
-// URL BASE PÚBLICA DO SEU R2
-const BASE_R2 =
-  "https://pub-0173b7fd04854be5b34e1727d5fa1798.r2.dev/gifs";
-
 export default function Visualizacao({
   selecionados = [],
   nomeAluno = "",
   voltar = () => {},
   editarReps = () => {},
 }) {
+  // URL pública da Cloudflare R2
+  const R2_BASE = "https://pub-0173b7fd04854be5b34e1727d5fa1798.r2.dev";
+
   // Observações por exercício
   const [obs, setObs] = useState(selecionados.map(() => ""));
 
-  /** ------------------------------------------------------------------
-   *  FUNÇÃO PARA CARREGAR O GIF EM BASE64 PARA O HTML EXPORTADO
-   * ------------------------------------------------------------------*/
+  // Converte GIF para Base64 (para o HTML exportado)
   const carregarGIF = async (grupo, file) => {
-    const url = `${BASE_R2}/${grupo}/${file}`;
-
+    const url = `${R2_BASE}/gifs/${grupo}/${encodeURIComponent(file)}`;
     const res = await fetch(url);
     const blob = await res.blob();
 
@@ -29,14 +25,13 @@ export default function Visualizacao({
     });
   };
 
-  /** ------------------------------------------------------------------
-   *  EXPORTAÇÃO COMPLETA — HTML COM BASE64
-   * ------------------------------------------------------------------*/
+  // EXPORTAÇÃO — NOME + Nº + OBSERVAÇÃO + GIF
   const gerarHTML = async () => {
     let blocoHTML = "";
 
     for (let i = 0; i < selecionados.length; i++) {
       const ex = selecionados[i];
+
       const base64 = await carregarGIF(ex.grupo, ex.file);
 
       blocoHTML += `
@@ -142,9 +137,6 @@ ${blocoHTML}
     a.click();
   };
 
-  /** ------------------------------------------------------------------
-   *  INTERFACE VISUAL
-   * ------------------------------------------------------------------*/
   return (
     <div className="min-h-screen w-[90%] mx-auto py-10">
       <div className="max-w-4xl mx-auto bg-white border border-gray-200 shadow-sm rounded-2xl p-8">
@@ -193,10 +185,10 @@ ${blocoHTML}
                 rows={2}
               />
 
-              {/* GIF vindo do Cloudflare R2 */}
+              {/* GIF carregado do R2 */}
               <div className="flex justify-center">
                 <img
-                  src={`${BASE_R2}/${ex.grupo}/${ex.file}`}
+                  src={`${R2_BASE}/gifs/${ex.grupo}/${encodeURIComponent(ex.file)}`}
                   alt={ex.nome}
                   className="w-28 h-28 object-contain border rounded-xl bg-gray-50"
                 />
