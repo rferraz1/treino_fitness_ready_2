@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 export default function Visualizacao({
   selecionados = [],
@@ -6,16 +6,23 @@ export default function Visualizacao({
   voltar = () => {},
   editarReps = () => {},
 }) {
-  // URL pública da Cloudflare R2
-  const R2_BASE = "https://pub-0173b7fd04854be5b34e1727d5fa1798.r2.dev";
-
-  // Observações por exercício
   const [obs, setObs] = useState(selecionados.map(() => ""));
+  const [urls, setUrls] = useState({});
 
-  // Converte GIF para Base64 (para o HTML exportado)
+  // 🔥 CARREGA O gifsUrls.json — OBRIGATÓRIO PARA AS GIFS FUNCIONAREM
+  useEffect(() => {
+    fetch("/gifsUrls.json")
+      .then((res) => res.json())
+      .then((data) => setUrls(data))
+      .catch((err) => console.error("Erro ao carregar gifsUrls.json", err));
+  }, []);
+
+  // Converte GIF R2 → Base64 para exportar HTML
   const carregarGIF = async (grupo, file) => {
-    const url = `${R2_BASE}/gifs/${grupo}/${encodeURIComponent(file)}`;
-    const res = await fetch(url);
+    const urlGif = urls?.[grupo]?.[file];
+    if (!urlGif) return "";
+
+    const res = await fetch(urlGif);
     const blob = await res.blob();
 
     return await new Promise((resolve) => {
@@ -25,18 +32,16 @@ export default function Visualizacao({
     });
   };
 
-  // EXPORTAÇÃO — NOME + Nº + OBSERVAÇÃO + GIF
+  // EXPORTA HTML FINAL
   const gerarHTML = async () => {
     let blocoHTML = "";
 
     for (let i = 0; i < selecionados.length; i++) {
       const ex = selecionados[i];
-
       const base64 = await carregarGIF(ex.grupo, ex.file);
 
       blocoHTML += `
         <section style="margin-bottom:40px; text-align:center;">
-          
           <div style="
             display:flex;
             justify-content:center;
@@ -71,24 +76,27 @@ export default function Visualizacao({
           ${
             obs[i]
               ? `<p style="
-                font-size:14px;
-                color:#555;
-                margin-bottom:16px;
-                font-family:Inter,Arial;
-              ">${obs[i]}</p>`
+                  font-size:14px;
+                  color:#555;
+                  margin-bottom:16px;
+                  font-family:Inter,Arial;
+                ">${obs[i]}</p>`
               : ""
           }
 
-          <img src="${base64}" alt="${ex.nome}" style="
-            width:290px;
-            height:290px;
-            object-fit:contain;
-            border-radius:14px;
-            padding:10px;
-            background:#fafafa;
-            border:1px solid #eee;
-          "/>
-
+          <img
+            src="${base64}"
+            alt="${ex.nome}"
+            style="
+              width:290px;
+              height:290px;
+              object-fit:contain;
+              border-radius:14px;
+              padding:10px;
+              background:#fafafa;
+              border:1px solid #eee;
+            "
+          />
         </section>
       `;
     }
@@ -146,55 +154,56 @@ ${blocoHTML}
         </h2>
 
         <div className="space-y-6">
-          {selecionados.map((ex, idx) => (
-            <div
-              key={ex.id}
-              className="p-5 border border-gray-200 rounded-2xl shadow-md bg-white"
-            >
-              {/* Topo — número + nome + reps */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  
-                  {/* Número no círculo */}
-                  <div className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">
-                    {idx + 1}
+          {selecionados.map((ex, idx) => {
+            const gifUrl = urls?.[ex.grupo]?.[ex.file] || "";
+
+            return (
+              <div
+                key={ex.id}
+                className="p-5 border border-gray-200 rounded-2xl shadow-md bg-white"
+              >
+                {/* Topo — número + nome + reps */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">
+                      {idx + 1}
+                    </div>
+
+                    <div className="text-lg font-medium">{ex.nome}</div>
                   </div>
 
-                  <div className="text-lg font-medium">{ex.nome}</div>
+                  <input
+                    type="text"
+                    defaultValue={ex.reps || "3x10 rep"}
+                    onChange={(e) => editarReps(idx, e.target.value)}
+                    className="border border-gray-300 rounded-md px-3 py-1 text-sm w-28 text-center"
+                  />
                 </div>
 
-                {/* Campo de repetição */}
-                <input
-                  type="text"
-                  defaultValue={ex.reps || "3x10 rep"}
-                  onChange={(e) => editarReps(idx, e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-1 text-sm w-28 text-center"
+                {/* Observações */}
+                <textarea
+                  placeholder="Observações para o aluno..."
+                  value={obs[idx]}
+                  onChange={(e) => {
+                    const novas = [...obs];
+                    novas[idx] = e.target.value;
+                    setObs(novas);
+                  }}
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm mb-4"
+                  rows={2}
                 />
-              </div>
 
-              {/* Observações */}
-              <textarea
-                placeholder="Observações para o aluno..."
-                value={obs[idx]}
-                onChange={(e) => {
-                  const novas = [...obs];
-                  novas[idx] = e.target.value;
-                  setObs(novas);
-                }}
-                className="w-full border border-gray-300 rounded-md p-2 text-sm mb-4"
-                rows={2}
-              />
-
-              {/* GIF carregado do R2 */}
-              <div className="flex justify-center">
-                <img
-                  src={`${R2_BASE}/gifs/${ex.grupo}/${encodeURIComponent(ex.file)}`}
-                  alt={ex.nome}
-                  className="w-28 h-28 object-contain border rounded-xl bg-gray-50"
-                />
+                {/* GIF carregada do R2 */}
+                <div className="flex justify-center">
+                  <img
+                    src={gifUrl}
+                    alt={ex.nome}
+                    className="w-28 h-28 object-contain border rounded-xl bg-gray-50"
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Botões */}
