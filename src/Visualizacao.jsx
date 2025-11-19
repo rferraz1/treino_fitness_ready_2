@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 export default function Visualizacao({
   selecionados = [],
@@ -7,61 +7,28 @@ export default function Visualizacao({
   editarReps = () => {},
 }) {
   const [obs, setObs] = useState(selecionados.map(() => ""));
-  const [gifMap, setGifMap] = useState({}); // 🔥 mapa final: gifMap[grupo][file] = URL REAL
 
   // ==========================================================
-  // 🔥 1 — CARREGA gifs.json + gifsUrls.json E CRIA O MAP REAL
+  // 🔥 1 — CONVERTE UMA URL DIRETA DO CLOUDFLARE EM BASE64
   // ==========================================================
-  useEffect(() => {
-    async function carregarDados() {
-      try {
-        const gifsRes = await fetch("/gifs.json");
-        const gifs = await gifsRes.json();
+  const carregarGIFBase64 = async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
 
-        const urlsRes = await fetch("/gifsUrls.json");
-        const urls = await urlsRes.json();
-
-        const map = {};
-
-        // 🔥 monta map[grupo][file] = url
-        for (const grupo in gifs) {
-          map[grupo] = {};
-          const files = gifs[grupo];
-          const urlsGrupo = urls[grupo] || [];
-
-          files.forEach((file, idx) => {
-            map[grupo][file] = urlsGrupo[idx] || ""; // mesma ordem do JSON
-          });
-        }
-
-        setGifMap(map);
-      } catch (err) {
-        console.error("Erro ao montar mapa de GIFs", err);
-      }
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.error("Erro carregando GIF:", url);
+      return "";
     }
-
-    carregarDados();
-  }, []);
-
-  // ==========================================================
-  // 🔥 2 — FUNÇÃO QUE PEGA GIF DO R2 E CONVERTE PARA BASE64
-  // ==========================================================
-  const carregarGIFBase64 = async (grupo, file) => {
-    const url = gifMap?.[grupo]?.[file];
-    if (!url) return "";
-
-    const res = await fetch(url);
-    const blob = await res.blob();
-
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
   };
 
   // ==========================================================
-  // 🔥 3 — EXPORTA PARA HTML
+  // 🔥 2 — EXPORTA O HTML FINAL
   // ==========================================================
   const gerarHTML = async () => {
     let blocoHTML = "";
@@ -69,7 +36,7 @@ export default function Visualizacao({
     for (let i = 0; i < selecionados.length; i++) {
       const ex = selecionados[i];
 
-      const base64 = await carregarGIFBase64(ex.grupo, ex.file);
+      const base64 = await carregarGIFBase64(ex.file); // ✔️ agora usa a URL real
 
       blocoHTML += `
         <section style="margin-bottom:40px; text-align:center;">
@@ -99,13 +66,7 @@ export default function Visualizacao({
             </h3>
           </div>
 
-          ${
-            obs[i]
-              ? `<p style="font-size:14px; color:#555; margin-bottom:16px;">
-                  ${obs[i]}
-                </p>`
-              : ""
-          }
+          ${obs[i] ? `<p style="font-size:14px; color:#555; margin-bottom:16px;">${obs[i]}</p>` : ""}
 
           <img 
             src="${base64}" 
@@ -168,7 +129,7 @@ ${blocoHTML}
   };
 
   // ==========================================================
-  // 🔥 4 — RENDER COMPONENTE
+  // 🔥 3 — RENDER COMPONENTE
   // ==========================================================
   return (
     <div className="min-h-screen w-[90%] mx-auto py-10">
@@ -179,8 +140,6 @@ ${blocoHTML}
 
         <div className="space-y-6">
           {selecionados.map((ex, idx) => {
-            const gifUrl = gifMap?.[ex.grupo]?.[ex.file] || "";
-
             return (
               <div
                 key={ex.id}
@@ -215,10 +174,10 @@ ${blocoHTML}
                   rows={2}
                 />
 
-                {/* GIF DO R2 — AGORA 100% FUNCIONANDO */}
+                {/* 🎯 AGORA FUNCIONA 100% */}
                 <div className="flex justify-center">
                   <img
-                    src={gifUrl}
+                    src={ex.file}
                     alt={ex.nome}
                     className="w-28 h-28 object-contain border rounded-xl bg-gray-50"
                   />
