@@ -7,22 +7,50 @@ export default function Visualizacao({
   editarReps = () => {},
 }) {
   const [obs, setObs] = useState(selecionados.map(() => ""));
-  const [urls, setUrls] = useState({});
+  const [gifMap, setGifMap] = useState({}); // 🔥 mapa final: gifMap[grupo][file] = URL REAL
 
-  // 🔥 CARREGA O gifsUrls.json — OBRIGATÓRIO PARA AS GIFS FUNCIONAREM
+  // ==========================================================
+  // 🔥 1 — CARREGA gifs.json + gifsUrls.json E CRIA O MAP REAL
+  // ==========================================================
   useEffect(() => {
-    fetch("/gifsUrls.json")
-      .then((res) => res.json())
-      .then((data) => setUrls(data))
-      .catch((err) => console.error("Erro ao carregar gifsUrls.json", err));
+    async function carregarDados() {
+      try {
+        const gifsRes = await fetch("/gifs.json");
+        const gifs = await gifsRes.json();
+
+        const urlsRes = await fetch("/gifsUrls.json");
+        const urls = await urlsRes.json();
+
+        const map = {};
+
+        // 🔥 monta map[grupo][file] = url
+        for (const grupo in gifs) {
+          map[grupo] = {};
+          const files = gifs[grupo];
+          const urlsGrupo = urls[grupo] || [];
+
+          files.forEach((file, idx) => {
+            map[grupo][file] = urlsGrupo[idx] || ""; // mesma ordem do JSON
+          });
+        }
+
+        setGifMap(map);
+      } catch (err) {
+        console.error("Erro ao montar mapa de GIFs", err);
+      }
+    }
+
+    carregarDados();
   }, []);
 
-  // Converte GIF R2 → Base64 para exportar HTML
-  const carregarGIF = async (grupo, file) => {
-    const urlGif = urls?.[grupo]?.[file];
-    if (!urlGif) return "";
+  // ==========================================================
+  // 🔥 2 — FUNÇÃO QUE PEGA GIF DO R2 E CONVERTE PARA BASE64
+  // ==========================================================
+  const carregarGIFBase64 = async (grupo, file) => {
+    const url = gifMap?.[grupo]?.[file];
+    if (!url) return "";
 
-    const res = await fetch(urlGif);
+    const res = await fetch(url);
     const blob = await res.blob();
 
     return await new Promise((resolve) => {
@@ -32,13 +60,16 @@ export default function Visualizacao({
     });
   };
 
-  // EXPORTA HTML FINAL
+  // ==========================================================
+  // 🔥 3 — EXPORTA PARA HTML
+  // ==========================================================
   const gerarHTML = async () => {
     let blocoHTML = "";
 
     for (let i = 0; i < selecionados.length; i++) {
       const ex = selecionados[i];
-      const base64 = await carregarGIF(ex.grupo, ex.file);
+
+      const base64 = await carregarGIFBase64(ex.grupo, ex.file);
 
       blocoHTML += `
         <section style="margin-bottom:40px; text-align:center;">
@@ -59,34 +90,25 @@ export default function Visualizacao({
               display:flex;
               justify-content:center;
               align-items:center;
-              font-family:Inter, Arial;
             ">
               ${i + 1}
             </div>
 
-            <h3 style="
-              font-size:22px;
-              font-weight:600;
-              font-family:Inter,Arial;
-            ">
+            <h3 style="font-size:22px; font-weight:600;">
               ${ex.nome}
             </h3>
           </div>
 
           ${
             obs[i]
-              ? `<p style="
-                  font-size:14px;
-                  color:#555;
-                  margin-bottom:16px;
-                  font-family:Inter,Arial;
-                ">${obs[i]}</p>`
+              ? `<p style="font-size:14px; color:#555; margin-bottom:16px;">
+                  ${obs[i]}
+                </p>`
               : ""
           }
 
-          <img
-            src="${base64}"
-            alt="${ex.nome}"
+          <img 
+            src="${base64}" 
             style="
               width:290px;
               height:290px;
@@ -113,7 +135,7 @@ export default function Visualizacao({
     padding:30px;
     max-width:900px;
     margin:auto;
-    font-family:Inter,Arial;
+    font-family:Arial;
   }
   h1 {
     text-align:center;
@@ -145,24 +167,25 @@ ${blocoHTML}
     a.click();
   };
 
+  // ==========================================================
+  // 🔥 4 — RENDER COMPONENTE
+  // ==========================================================
   return (
     <div className="min-h-screen w-[90%] mx-auto py-10">
       <div className="max-w-4xl mx-auto bg-white border border-gray-200 shadow-sm rounded-2xl p-8">
-
         <h2 className="text-3xl font-semibold text-center mb-6">
           Treino de {nomeAluno}
         </h2>
 
         <div className="space-y-6">
           {selecionados.map((ex, idx) => {
-            const gifUrl = urls?.[ex.grupo]?.[ex.file] || "";
+            const gifUrl = gifMap?.[ex.grupo]?.[ex.file] || "";
 
             return (
               <div
                 key={ex.id}
                 className="p-5 border border-gray-200 rounded-2xl shadow-md bg-white"
               >
-                {/* Topo — número + nome + reps */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">
@@ -180,7 +203,6 @@ ${blocoHTML}
                   />
                 </div>
 
-                {/* Observações */}
                 <textarea
                   placeholder="Observações para o aluno..."
                   value={obs[idx]}
@@ -193,7 +215,7 @@ ${blocoHTML}
                   rows={2}
                 />
 
-                {/* GIF carregada do R2 */}
+                {/* GIF DO R2 — AGORA 100% FUNCIONANDO */}
                 <div className="flex justify-center">
                   <img
                     src={gifUrl}
@@ -206,7 +228,6 @@ ${blocoHTML}
           })}
         </div>
 
-        {/* Botões */}
         <div className="flex justify-center gap-4 mt-8">
           <button
             onClick={voltar}
@@ -222,7 +243,6 @@ ${blocoHTML}
             Exportar treino
           </button>
         </div>
-
       </div>
     </div>
   );
